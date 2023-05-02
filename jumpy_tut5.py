@@ -1,151 +1,115 @@
-#import libraries
 import pygame
+from pygame.locals import *
+import sys
 import random
 
-#initialise pygame
+width = 580
+height = 920
+fps = 60
+acceleration = 0.5
+friction = - 0.12
+vec = pygame.math.Vector2
 pygame.init()
-
-#game window dimensions
-SCREEN_WIDTH = 400
-SCREEN_HEIGHT = 600
-
-#create game window
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption('Jumpy')
-
-#set frame rate
+screen = pygame.display.set_mode((width, height))
 clock = pygame.time.Clock()
-FPS = 60
-
-#game variables
-GRAVITY = 1
+pass_through_check = False
+jump = False
+plat_img = pygame.Surface((100, 20))
+plat_img.fill((255, 255, 255))
 MAX_PLATFORMS = 10
 
-#define colours
-WHITE = (255, 255, 255)
 
-#load images
-jumpy_image = pygame.image.load('assets/jump.png').convert_alpha()
-bg_image = pygame.image.load('assets/bg.png').convert_alpha()
-platform_image = pygame.image.load('assets/wood.png').convert_alpha()
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.surf = pygame.Surface((30, 30))
+        self.surf.fill((128, 255, 40))
+        self.rect = self.surf.get_rect()
 
+        self.pos = vec((200, 100))
+        self.vel = vec(0, 0)
+        self.acc = vec(0, 0)
 
-#player class
-class Player():
-	def __init__(self, x, y):
-		self.image = pygame.transform.scale(jumpy_image, (45, 45))
-		self.width = 25
-		self.height = 40
-		self.rect = pygame.Rect(0, 0, self.width, self.height)
-		self.rect.center = (x, y)
-		self.vel_y = 0
-		self.flip = False
+    def move(self):
+        global jump
+        self.acc = vec(0, 0.35)
+        pressed_keys = pygame.key.get_pressed()
+        if pressed_keys[K_LEFT]:
+            self.acc.x = -acceleration
+        if pressed_keys[K_RIGHT]:
+            self.acc.x = acceleration
 
-	def move(self):
-		#reset variables
-		dx = 0
-		dy = 0
+        self.acc.x += self.vel.x * friction
+        self.vel += self.acc
+        self.pos += self.vel + 0.5 * self.acc
 
-		#process keypresses
-		key = pygame.key.get_pressed()
-		if key[pygame.K_a]:
-			dx = -10
-			self.flip = True
-		if key[pygame.K_d]:
-			dx = 10
-			self.flip = False
+        if self.pos.x > width:
+            self.pos.x = 0
+        if self.pos.x < 0:
+            self.pos.x = width
 
-		#gravity
-		self.vel_y += GRAVITY
-		dy += self.vel_y
+        if self.vel.y > 5:
+            jump = True
+        elif self.vel.y < 0:
+            jump = False
 
-		#ensure player doesn't go off the edge of the screen
-		if self.rect.left + dx < 0:
-			dx = -self.rect.left
-		if self.rect.right + dx > SCREEN_WIDTH:
-			dx = SCREEN_WIDTH - self.rect.right
+        if self.pos.y > 1000:
+            pygame.quit()
 
+        self.rect.midbottom = self.pos
 
-		#check collision with platforms
-		for platform in platform_group:
-			#collision in the y direction
-			if platform.rect.colliderect(self.rect.x, self.rect.y + dy, self.width, self.height):
-				#check if above the platform
-				if self.rect.bottom < platform.rect.centery:
-					if self.vel_y > 0:
-						self.rect.bottom = platform.rect.top
-						dy = 0
-						self.vel_y = -20
+    def update(self):
+        global pass_through_check
+        hits = pygame.sprite.spritecollide(P1, platform_group, False)
+        if hits and jump == True:
+            self.pos.y = hits[0].rect.top + 1
+            self.vel.y = 0
+            P1.jump()
+
+    def jump(self):
+        global pass_through_check
+        global jump
+        if jump:
+            self.vel.y = -15
 
 
-		#check collision with ground
-		if self.rect.bottom + dy > SCREEN_HEIGHT:
-			dy = 0
-			self.vel_y = -20
-
-
-		#update rectangle position
-		self.rect.x += dx
-		self.rect.y += dy
-
-	def draw(self):
-		screen.blit(pygame.transform.flip(self.image, self.flip, False), (self.rect.x - 12, self.rect.y - 5))
-		pygame.draw.rect(screen, WHITE, self.rect, 2)
-
-
-
-#platform class
 class Platform(pygame.sprite.Sprite):
-	def __init__(self, x, y, width):
-		pygame.sprite.Sprite.__init__(self)
-		self.image = pygame.transform.scale(platform_image, (width, 10))
-		self.rect = self.image.get_rect()
-		self.rect.x = x
-		self.rect.y = y
+    def __init__(self, x2, y2):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = plat_img
+        self.rect = self.image.get_rect()
+        self.rect.x = x2
+        self.rect.y = y2
 
 
-
-#player instance
-jumpy = Player(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 150)
-
-#create sprite groups
 platform_group = pygame.sprite.Group()
 
-#create temporary platforms
 for p in range(MAX_PLATFORMS):
-	p_w = random.randint(40, 60)
-	p_x = random.randint(0, SCREEN_WIDTH - p_w)
-	p_y = p * random.randint(80, 120)
-	platform = Platform(p_x, p_y, p_w)
-	platform_group.add(platform)
+    p_w = random.randint(40, 60)
+    p_x = random.randint(0, width - p_w)
+    p_y = p * random.randint(80, 120)
+    platformp = Platform(p_x, p_y)
+    platform_group.add(platformp)
+
+P1 = Player()
 
 
-#game loop
-run = True
-while run:
-
-	clock.tick(FPS)
-
-	jumpy.move()
-
-	#draw background
-	screen.blit(bg_image, (0, 0))
-
-	#draw sprites
-	platform_group.draw(screen)
-	jumpy.draw()
+all_sprites = pygame.sprite.Group()
+all_sprites.add(P1)
 
 
-	#event handler
-	for event in pygame.event.get():
-		if event.type == pygame.QUIT:
-			run = False
+while True:
+    screen.fill("black")
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            exit()
+            sys.exit()
 
-
-	#update display window
-	pygame.display.update()
-
-
-
-pygame.quit()
-
+    for entity in all_sprites:
+        screen.blit(entity.surf, entity.rect)
+    platform_group.draw(screen)
+    P1.move()
+    P1.update()
+    pygame.display.flip()
+    pygame.display.update()
+    clock.tick(fps)
